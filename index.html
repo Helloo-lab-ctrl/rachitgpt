@@ -566,7 +566,9 @@
                 messages: [],
                 createdAt: Date.now()
             };
-            state.messages = [];
+            // state.messages points to the SAME array as the chat's messages,
+            // so there is only ever one list (prevents duplicate messages).
+            state.messages = state.chats[chatId].messages;
             inputField.value = '';
             inputField.style.height = 'auto';
             renderMessages();
@@ -592,12 +594,10 @@
             // Build the full conversation history so the AI has memory of the chat
             const history = state.messages.map(m => ({ role: m.role, content: m.content }));
 
-            // Add an empty AI message that we'll stream tokens into
+            // Add an empty AI message that we'll stream tokens into.
+            // state.messages IS the chat's message list, so push only once.
             const aiMsg = { role: 'ai', content: '', id: Date.now() + 1, streaming: true };
             state.messages.push(aiMsg);
-            if (state.currentChatId && state.chats[state.currentChatId]) {
-                state.chats[state.currentChatId].messages.push(aiMsg);
-            }
 
             state.isStreaming = true;
             sendBtn.disabled = true;
@@ -623,15 +623,13 @@
 
         function addMessage(role, content) {
             const message = { role, content, id: Date.now() };
+            // state.messages IS the chat's message list, so push only once.
             state.messages.push(message);
 
-            if (state.currentChatId && state.chats[state.currentChatId]) {
-                state.chats[state.currentChatId].messages.push(message);
-
-                // Update chat title from first user message
-                if (role === 'user' && state.chats[state.currentChatId].title === 'New Chat') {
-                    state.chats[state.currentChatId].title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
-                }
+            const chat = state.chats[state.currentChatId];
+            if (chat && role === 'user' && chat.title === 'New Chat') {
+                // Use the first user message as the chat title
+                chat.title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
             }
 
             renderMessages();
