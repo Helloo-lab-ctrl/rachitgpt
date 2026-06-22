@@ -41,6 +41,21 @@
             --user-bg: #10a37f;
             --ai-bg: #444654;
             --hover-color: #2a2a2a;
+            --code-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Light theme — applied when <body> has class "light-theme" */
+        body.light-theme {
+            --primary-bg: #ffffff;
+            --secondary-bg: #f7f7f8;
+            --tertiary-bg: #ececf1;
+            --text-primary: #1a1a1a;
+            --text-secondary: #3a3a3a;
+            --border-color: #d9d9e3;
+            --user-bg: #10a37f;
+            --ai-bg: #d1d5db;
+            --hover-color: #e3e3e8;
+            --code-bg: rgba(0, 0, 0, 0.07);
         }
 
         body {
@@ -49,6 +64,7 @@
             color: var(--text-primary);
             height: 100vh;
             overflow: hidden;
+            transition: background-color 0.2s, color 0.2s;
         }
 
         .container {
@@ -270,7 +286,7 @@
         .markdown li { margin: 4px 0; }
         .markdown a { color: #58a6ff; }
         .markdown code {
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: var(--code-bg);
             padding: 2px 6px;
             border-radius: 4px;
             font-family: 'SF Mono', Menlo, Consolas, monospace;
@@ -331,6 +347,7 @@
             display: flex;
             gap: 12px;
             max-width: 100%;
+            align-items: flex-end;
         }
 
         .input-box {
@@ -391,6 +408,125 @@
         .send-btn svg {
             width: 18px;
             height: 18px;
+        }
+
+        /* Stop button (shown while AI is replying) */
+        .send-btn.stop {
+            background-color: #ef4444;
+        }
+
+        /* Attach (image) button + hidden file input */
+        .attach-btn {
+            padding: 10px 12px;
+            background-color: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: background-color 0.2s;
+        }
+        .attach-btn:hover { background-color: var(--hover-color); }
+
+        /* Selected-image preview above the input */
+        .image-preview {
+            display: none;
+            margin-bottom: 10px;
+            position: relative;
+            width: fit-content;
+        }
+        .image-preview.show { display: block; }
+        .image-preview img {
+            max-height: 80px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: block;
+        }
+        .image-preview .remove-image {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Image attached inside a sent message */
+        .message-content .sent-image {
+            max-width: 240px;
+            max-height: 240px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        /* Theme toggle button (bottom of sidebar) */
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            background-color: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+            flex-shrink: 0;
+        }
+        .theme-toggle:hover { background-color: var(--hover-color); }
+
+        /* Welcome screen with example prompts */
+        .welcome {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: var(--text-primary);
+            padding: 20px;
+        }
+        .welcome-icon { font-size: 56px; margin-bottom: 12px; }
+        .welcome-title { font-size: 26px; font-weight: 600; margin-bottom: 8px; }
+        .welcome-subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 28px; }
+        .examples {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 240px));
+            gap: 12px;
+            width: 100%;
+            max-width: 520px;
+        }
+        .example-card {
+            background-color: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px 16px;
+            text-align: left;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1.4;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .example-card:hover { background-color: var(--hover-color); transform: translateY(-2px); }
+        .example-card .example-emoji { font-size: 18px; margin-right: 6px; }
+        @media (max-width: 600px) {
+            .examples { grid-template-columns: 1fr; }
         }
 
         /* Scrollbar */
@@ -489,6 +625,10 @@
                 New Chat
             </button>
             <div class="chat-history" id="chatHistory"></div>
+            <button class="theme-toggle" id="themeToggle">
+                <span id="themeIcon">☀️</span>
+                <span id="themeLabel">Light mode</span>
+            </button>
         </div>
 
         <!-- Chat Area -->
@@ -503,7 +643,14 @@
 
             <!-- Input -->
             <div class="input-area">
+                <!-- Preview of an image the user is about to send -->
+                <div class="image-preview" id="imagePreview">
+                    <img id="imagePreviewImg" src="" alt="attachment preview">
+                    <button class="remove-image" id="removeImageBtn" title="Remove image">&times;</button>
+                </div>
                 <div class="input-wrapper">
+                    <input type="file" id="imageInput" accept="image/*" style="display:none">
+                    <button class="attach-btn" id="attachBtn" title="Attach an image">📎</button>
                     <div class="input-box">
                         <textarea
                             id="inputField"
@@ -511,7 +658,7 @@
                             rows="1"
                         ></textarea>
                     </div>
-                    <button class="send-btn" id="sendBtn">
+                    <button class="send-btn" id="sendBtn" title="Send">
                         <svg fill="currentColor" viewBox="0 0 24 24">
                             <path d="M16.6915026,12.4744748 L3.50612381,13.2599618 C3.19218622,13.2599618 3.03521743,13.4170592 3.03521743,13.5741566 L1.15159189,20.0151496 C0.8376543,20.8006365 0.99,21.89 1.77946707,22.52 C2.41,22.99 3.50612381,23.1 4.13399899,22.8429026 L21.714504,14.0454487 C22.6563168,13.5741566 23.1272231,12.6315722 22.9702544,11.6889879 L4.13399899,1.16350062 C3.34915502,0.9 2.40734225,1.00636533 1.77946707,1.4776575 C0.994623095,2.10604706 0.837654326,3.0486314 1.15159189,3.99021575 L3.03521743,10.4312088 C3.03521743,10.5883061 3.19218622,10.7454035 3.50612381,10.7454035 L16.6915026,11.5308905 C16.6915026,11.5308905 17.1624089,11.5308905 17.1624089,12.0021827 C17.1624089,12.4744748 16.6915026,12.4744748 16.6915026,12.4744748 Z"></path>
                         </svg>
@@ -527,11 +674,14 @@
             currentChatId: null,
             chats: {},
             messages: [],
-            isStreaming: false
+            isStreaming: false,
+            abortController: null,   // lets us cancel a streaming reply
+            pendingImage: null       // { dataUrl } selected but not yet sent
         };
 
         const STORAGE_KEY = 'rachitai_chats';
         const CURRENT_KEY = 'rachitai_current';
+        const THEME_KEY = 'rachitai_theme';
 
         // DOM elements
         const inputField = document.getElementById('inputField');
@@ -542,6 +692,50 @@
         const menuToggle = document.getElementById('menuToggle');
         const sidebar = document.getElementById('sidebar');
         const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeLabel = document.getElementById('themeLabel');
+        const attachBtn = document.getElementById('attachBtn');
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const imagePreviewImg = document.getElementById('imagePreviewImg');
+        const removeImageBtn = document.getElementById('removeImageBtn');
+
+        // --- Theme (light / dark) ---
+        function applyTheme(theme) {
+            const isLight = theme === 'light';
+            document.body.classList.toggle('light-theme', isLight);
+            // Button shows the mode you'll switch TO
+            themeIcon.textContent = isLight ? '🌙' : '☀️';
+            themeLabel.textContent = isLight ? 'Dark mode' : 'Light mode';
+        }
+        function toggleTheme() {
+            const next = document.body.classList.contains('light-theme') ? 'dark' : 'light';
+            applyTheme(next);
+            try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+        }
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // --- Image attachment ---
+        attachBtn.addEventListener('click', () => imageInput.click());
+        imageInput.addEventListener('change', () => {
+            const file = imageInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                state.pendingImage = { dataUrl: reader.result };
+                imagePreviewImg.src = reader.result;
+                imagePreview.classList.add('show');
+            };
+            reader.readAsDataURL(file);
+            imageInput.value = ''; // allow re-selecting the same file later
+        });
+        function clearPendingImage() {
+            state.pendingImage = null;
+            imagePreviewImg.src = '';
+            imagePreview.classList.remove('show');
+        }
+        removeImageBtn.addEventListener('click', clearPendingImage);
 
         // Mobile sidebar open/close
         function openSidebar() {
@@ -571,8 +765,24 @@
             }
         });
 
-        // Send button click
-        sendBtn.addEventListener('click', sendMessage);
+        // The send button turns into a Stop button while the AI is replying
+        const SEND_ICON = sendBtn.innerHTML;
+        const STOP_ICON = '<svg fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>';
+        function setStreamingUI(streaming) {
+            sendBtn.classList.toggle('stop', streaming);
+            sendBtn.innerHTML = streaming ? STOP_ICON : SEND_ICON;
+            sendBtn.title = streaming ? 'Stop' : 'Send';
+        }
+        function stopStreaming() {
+            if (state.abortController) state.abortController.abort();
+        }
+        sendBtn.addEventListener('click', () => {
+            if (state.isStreaming) {
+                stopStreaming();
+            } else {
+                sendMessage();
+            }
+        });
 
         // New chat button
         newChatBtn.addEventListener('click', createNewChat);
@@ -599,20 +809,27 @@
 
         async function sendMessage() {
             const text = inputField.value.trim();
-            if (!text || state.isStreaming) return;
+            const image = state.pendingImage ? state.pendingImage.dataUrl : null;
+            // Need at least text or an image, and not already streaming
+            if ((!text && !image) || state.isStreaming) return;
 
             // Create new chat if none exists
             if (!state.currentChatId) {
                 createNewChat();
             }
 
-            // Add user message
-            addMessage('user', text);
+            // Add user message (with optional image)
+            addMessage('user', text, image);
             inputField.value = '';
             inputField.style.height = 'auto';
+            clearPendingImage();
 
-            // Build the full conversation history so the AI has memory of the chat
-            const history = state.messages.map(m => ({ role: m.role, content: m.content }));
+            // Build the full conversation history (incl. images) so the AI has memory
+            const history = state.messages.map(m => ({
+                role: m.role,
+                content: m.content,
+                image: m.image || null
+            }));
 
             // Add an empty AI message that we'll stream tokens into.
             // state.messages IS the chat's message list, so push only once.
@@ -620,36 +837,45 @@
             state.messages.push(aiMsg);
 
             state.isStreaming = true;
-            sendBtn.disabled = true;
+            state.abortController = new AbortController();
+            setStreamingUI(true);
             renderMessages();
 
             try {
                 await streamAIResponse(history, (chunk) => {
                     aiMsg.content += chunk;
                     renderMessages();
-                });
+                }, state.abortController.signal);
             } catch (error) {
-                console.error('Error streaming AI response:', error);
-                aiMsg.content = aiMsg.content || 'Sorry, I encountered an error.';
+                if (error.name === 'AbortError') {
+                    // User pressed Stop — keep whatever was generated so far
+                    if (!aiMsg.content) aiMsg.content = '_(stopped)_';
+                } else {
+                    console.error('Error streaming AI response:', error);
+                    aiMsg.content = aiMsg.content || 'Sorry, I encountered an error.';
+                }
             } finally {
                 aiMsg.streaming = false;
                 state.isStreaming = false;
-                sendBtn.disabled = false;
+                state.abortController = null;
+                setStreamingUI(false);
                 renderMessages();
                 renderChatHistory();
                 saveState();
             }
         }
 
-        function addMessage(role, content) {
+        function addMessage(role, content, image) {
             const message = { role, content, id: Date.now() };
+            if (image) message.image = image;
             // state.messages IS the chat's message list, so push only once.
             state.messages.push(message);
 
             const chat = state.chats[state.currentChatId];
             if (chat && role === 'user' && chat.title === 'New Chat') {
-                // Use the first user message as the chat title
-                chat.title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+                // Use the first user message (or "Image") as the chat title
+                const base = content || (image ? 'Image' : '');
+                chat.title = base.substring(0, 30) + (base.length > 30 ? '...' : '');
             }
 
             renderMessages();
@@ -664,9 +890,37 @@
             return escapeHtml(text).replace(/\n/g, '<br>');
         }
 
+        // Welcome screen with clickable example prompts (shown when a chat is empty)
+        function getWelcomeHTML() {
+            const examples = [
+                { emoji: '💡', text: 'Explain how the internet works in simple terms' },
+                { emoji: '✍️', text: 'Write a short poem about the ocean' },
+                { emoji: '🍳', text: 'Give me a quick recipe for dinner tonight' },
+                { emoji: '🚀', text: 'Give me 5 fun facts about space' }
+            ];
+            const cards = examples.map(ex =>
+                `<button class="example-card" onclick="useExample('${ex.text.replace(/'/g, "\\'")}')">
+                    <span class="example-emoji">${ex.emoji}</span>${ex.text}
+                </button>`
+            ).join('');
+            return `
+                <div class="welcome">
+                    <div class="welcome-icon">🤖</div>
+                    <div class="welcome-title">Welcome to RachitAI</div>
+                    <div class="welcome-subtitle">Ask me anything — or try one of these:</div>
+                    <div class="examples">${cards}</div>
+                </div>`;
+        }
+
+        function useExample(text) {
+            if (state.isStreaming) return;
+            inputField.value = text;
+            sendMessage();
+        }
+
         function renderMessages() {
             if (state.messages.length === 0) {
-                messagesContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div class="empty-state-text">Welcome to RachitAI</div></div>';
+                messagesContainer.innerHTML = getWelcomeHTML();
                 return;
             }
 
@@ -680,7 +934,9 @@
                         inner = renderMarkdown(msg.content) + (msg.streaming ? '<span class="cursor"></span>' : '');
                     }
                 } else {
-                    inner = escapeHtml(msg.content);
+                    // User message: show attached image (if any) above the text
+                    const imageHtml = msg.image ? `<img class="sent-image" src="${msg.image}" alt="attached image">` : '';
+                    inner = imageHtml + escapeHtml(msg.content);
                 }
                 const contentClass = msg.role === 'ai' ? 'message-content markdown' : 'message-content';
                 return `
@@ -757,11 +1013,13 @@
         }
 
         // Streams the AI reply token-by-token. Calls onChunk(text) for each piece.
-        async function streamAIResponse(history, onChunk) {
+        // The optional signal lets the Stop button cancel mid-reply.
+        async function streamAIResponse(history, onChunk, signal) {
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ history })
+                body: JSON.stringify({ history }),
+                signal
             });
 
             if (!response.ok || !response.body) {
@@ -810,6 +1068,11 @@
         if (window.marked) {
             marked.setOptions({ breaks: true, gfm: true });
         }
+
+        // Restore saved theme (default: dark)
+        try {
+            applyTheme(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark');
+        } catch (e) {}
 
         // Initialize: restore saved chats, or start a fresh one
         loadState();

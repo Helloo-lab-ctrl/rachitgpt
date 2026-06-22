@@ -13,7 +13,8 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(cors());
-app.use(express.json());
+// Allow larger bodies so users can attach images (base64 can be a few MB).
+app.use(express.json({ limit: "12mb" }));
 
 // Limit each visitor to 15 messages per minute so nobody can spam the
 // endpoint and burn through your Gemini API quota.
@@ -66,16 +67,32 @@ asks for depth.`;
 // Only send the most recent messages to keep token usage (and cost) in check.
 const MAX_HISTORY = 20;
 
+// Turn a message's optional image (a "data:...;base64,..." URL) into a
+// Gemini inline-data part. Returns null if there's no valid image.
+function imagePart(image) {
+  if (typeof image !== "string" || !image.startsWith("data:")) return null;
+  const match = image.match(/^data:([^;]+);base64,(.*)$/);
+  if (!match) return null;
+  return { inlineData: { mimeType: match[1], data: match[2] } };
+}
+
 // Convert the chat history from the frontend into Gemini's "contents" format.
-// Accepts either { history: [{role, content}, ...] } or the old { message: "..." }.
+// Accepts { history: [{role, content, image?}, ...] } or the old { message }.
 function buildContents(body) {
   if (Array.isArray(body.history) && body.history.length > 0) {
     let contents = body.history
-      .filter((m) => m && m.content)
-      .map((m) => ({
-        role: m.role === "ai" || m.role === "model" ? "model" : "user",
-        parts: [{ text: String(m.content) }],
-      }));
+      .filter((m) => m && (m.content || m.image))
+      .map((m) => {
+        const parts = [];
+        const img = imagePart(m.image);
+        if (img) parts.push(img);
+        if (m.content) parts.push({ text: String(m.content) });
+        if (parts.length === 0) parts.push({ text: "" });
+        return {
+          role: m.role === "ai" || m.role === "model" ? "model" : "user",
+          parts,
+        };
+      });
 
     // Keep only the latest messages...
     if (contents.length > MAX_HISTORY) {
