@@ -29,6 +29,30 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
+// Public site address — used by the SEO files below.
+const SITE_URL = process.env.SITE_URL || "https://rachitgpt.onrender.com";
+
+// Tells search engines they may crawl the whole site, and where the sitemap is.
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain").send(
+    `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`
+  );
+});
+
+// Lists the page(s) for Google to index.
+app.get("/sitemap.xml", (req, res) => {
+  res.type("application/xml").send(
+    `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${SITE_URL}/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`
+  );
+});
+
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
