@@ -852,10 +852,19 @@
                     if (!aiMsg.content) aiMsg.content = '_(stopped)_';
                 } else {
                     console.error('Error streaming AI response:', error);
-                    aiMsg.content = aiMsg.content || 'Sorry, I encountered an error.';
+                    // Prefer the server's friendly message (e.g. "The AI is busy…")
+                    const friendly = (error && error.message && !error.message.startsWith('HTTP'))
+                        ? error.message
+                        : 'Something went wrong. Please try again.';
+                    aiMsg.content = aiMsg.content || '⚠️ ' + friendly;
                 }
             } finally {
                 aiMsg.streaming = false;
+                // If the reply came back completely empty (e.g. blocked or no
+                // content), show a message instead of an empty bubble.
+                if (!aiMsg.content) {
+                    aiMsg.content = '⚠️ No response — please try again.';
+                }
                 state.isStreaming = false;
                 state.abortController = null;
                 setStreamingUI(false);
