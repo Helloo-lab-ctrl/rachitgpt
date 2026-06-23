@@ -107,8 +107,19 @@ function buildContents(body) {
   return [{ role: "user", parts: [{ text: String(body.message || "") }] }];
 }
 
-const MAX_ATTEMPTS = 3;
+// Try the best model first; fall back to another if the first is busy/limited.
+// (Each model has its own quota, so a backup greatly improves reliability.)
+const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+const ATTEMPTS_PER_MODEL = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Relaxed safety so ordinary questions aren't blocked into empty replies.
+const SAFETY_SETTINGS = [
+  { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+];
 
 app.post("/chat", chatLimiter, async (req, res) => {
   // Stream the reply back token-by-token using Server-Sent Events.
@@ -119,51 +130,54 @@ app.post("/chat", chatLimiter, async (req, res) => {
 
   const contents = buildContents(req.body);
 
-  // The Gemini API occasionally returns a transient error (e.g. "model
-  // overloaded"). Retry a few times — but only while we haven't sent any
-  // text yet, so we never duplicate a partially-streamed reply.
   let wroteAny = false;
   let lastError = null;
+  let rateLimited = false;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS && !wroteAny; attempt++) {
-    try {
-      const stream = await ai.models.generateContentStream({
-        model: "gemini-2.5-flash",
-        contents,
-        config: { systemInstruction: SYSTEM_PROMPT },
-      });
+  // Try each model; within a model, retry transient errors a couple of times.
+  // We only retry while no text has been sent, so a reply is never duplicated.
+  outer: for (const model of MODELS) {
+    for (let attempt = 1; attempt <= ATTEMPTS_PER_MODEL && !wroteAny; attempt++) {
+      try {
+        const stream = await ai.models.generateContentStream({
+          model,
+          contents,
+          config: { systemInstruction: SYSTEM_PROMPT, safetySettings: SAFETY_SETTINGS },
+        });
 
-      for await (const chunk of stream) {
-        const text = chunk.text;
-        if (text) {
-          res.write(`data: ${JSON.stringify({ text })}\n\n`);
-          wroteAny = true;
+        for await (const chunk of stream) {
+          const text = chunk.text;
+          if (text) {
+            res.write(`data: ${JSON.stringify({ text })}\n\n`);
+            wroteAny = true;
+          }
         }
-      }
 
-      lastError = null;
-      break; // finished cleanly
-    } catch (error) {
-      lastError = error;
-      const msg = error?.message || String(error);
-      console.error(`/chat attempt ${attempt}/${MAX_ATTEMPTS} failed:`, msg);
-      // A 429 means we've hit the API usage limit — retrying immediately
-      // won't help, so stop and report it clearly.
-      if (/429|too many requests|resource_exhausted|quota/i.test(msg)) {
-        lastError.isRateLimit = true;
-        break;
-      }
-      if (!wroteAny && attempt < MAX_ATTEMPTS) {
-        await sleep(500 * attempt); // brief backoff before retrying
+        lastError = null;
+        break outer; // finished cleanly
+      } catch (error) {
+        lastError = error;
+        const msg = error?.message || String(error);
+        console.error(`[${model}] attempt ${attempt}/${ATTEMPTS_PER_MODEL} failed:`, msg);
+        if (wroteAny) break outer;
+        // A 429 means this model's usage limit is hit — retrying it won't help,
+        // so move on to the next model in the list.
+        if (/429|too many requests|resource_exhausted|quota/i.test(msg)) {
+          rateLimited = true;
+          break; // try the next model
+        }
+        if (attempt < ATTEMPTS_PER_MODEL) {
+          await sleep(500 * attempt); // brief backoff before retrying
+        }
       }
     }
   }
 
   // Only show an error if we never managed to send any text
   if (lastError && !wroteAny) {
-    const friendly = lastError.isRateLimit
+    const friendly = rateLimited
       ? "RachitAI has hit its free usage limit for the moment. Please wait about a minute and try again."
-      : "The AI is busy right now — please try again.";
+      : "The AI is busy right now — please try again in a few seconds.";
     res.write(`data: ${JSON.stringify({ error: friendly })}\n\n`);
   }
 

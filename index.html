@@ -717,14 +717,38 @@
         themeToggle.addEventListener('click', toggleTheme);
 
         // --- Image attachment ---
+        // Shrink big photos before sending: smaller = faster + far less likely
+        // to fail or eat the usage limit. Caps the largest side at 1024px.
+        function downscaleImage(dataUrl, maxDim, quality) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (Math.max(width, height) > maxDim) {
+                        const scale = maxDim / Math.max(width, height);
+                        width = Math.round(width * scale);
+                        height = Math.round(height * scale);
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => resolve(dataUrl); // fall back to original
+                img.src = dataUrl;
+            });
+        }
+
         attachBtn.addEventListener('click', () => imageInput.click());
         imageInput.addEventListener('change', () => {
             const file = imageInput.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = () => {
-                state.pendingImage = { dataUrl: reader.result };
-                imagePreviewImg.src = reader.result;
+            reader.onload = async () => {
+                const resized = await downscaleImage(reader.result, 1024, 0.85);
+                state.pendingImage = { dataUrl: resized };
+                imagePreviewImg.src = resized;
                 imagePreview.classList.add('show');
             };
             reader.readAsDataURL(file);
